@@ -1,12 +1,12 @@
 import React from 'react'
 import { Text, View } from 'react-native'
 
-function WorldClockScreen() {
+function TimerScreen() {
     return (
         <View style={{ flex: 1, backgroundColor: "#000000", alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ color: "white", fontSize: 20 }}>In Progressss</Text>
+            <Text style={{ color: "white", fontSize: 20 }}>Timer screen</Text>
         </View>
     )
 }
 
-export default WorldClockScreen
+export default TimerScreen

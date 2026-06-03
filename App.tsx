@@ -11,7 +11,7 @@ function App() {
   return (
     <SafeAreaProvider style={{ flex: 1 }}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#3C3C3C" }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#000000" }}>
         <RootNavigator />
       </SafeAreaView>
     </SafeAreaProvider>
