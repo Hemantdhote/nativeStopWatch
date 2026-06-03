@@ -10,6 +10,7 @@ import {
     UIManager
 } from "react-native";
 import Svg, { Circle, Path, Defs, LinearGradient, Stop } from "react-native-svg";
+import { useRoute, useNavigation } from "@react-navigation/native";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -39,11 +40,42 @@ const formatTime = (ms: number) => {
     };
 };
 
+const formatTimerTime = (ms: number) => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const hundredths = Math.floor((ms % 1000) / 10);
+
+    const pad = (num: number) => String(num).padStart(2, "0");
+
+    return {
+        hours: pad(hours),
+        minutes: pad(minutes),
+        seconds: pad(seconds),
+        hundredths: pad(hundredths)
+    };
+};
+
 function StopWatchScreen() {
+    const route = useRoute<any>();
+    const navigation = useNavigation<any>();
+    const params = route.params;
+
     const [time, setTime] = useState<number>(0);
     const [isRunning, setIsRunning] = useState<boolean>(false);
     const [hasStarted, setHasStarted] = useState<boolean>(false);
     const [laps, setLaps] = useState<LapRecord[]>([]);
+
+    const [isTimerMode, setIsTimerMode] = useState<boolean>(false);
+    const [timerDuration, setTimerDuration] = useState<number>(0);
+
+    const isTimerModeRef = useRef<boolean>(false);
+    const timerDurationRef = useRef<number>(0);
+
+    // Sync refs
+    isTimerModeRef.current = isTimerMode;
+    timerDurationRef.current = timerDuration;
 
     const requestRef = useRef<number | null>(null);
     const startTimeRef = useRef<number>(0);
@@ -56,8 +88,23 @@ function StopWatchScreen() {
     const updateTimer = useCallback(() => {
         const now = Date.now();
         const elapsed = now - startTimeRef.current + accumulatedTimeRef.current;
-        setTime(elapsed);
-        requestRef.current = requestAnimationFrame(updateTimer);
+        
+        if (isTimerModeRef.current) {
+            const remaining = Math.max(0, timerDurationRef.current - elapsed);
+            setTime(remaining);
+            if (remaining <= 0) {
+                setIsRunning(false);
+                if (requestRef.current) {
+                    cancelAnimationFrame(requestRef.current);
+                    requestRef.current = null;
+                }
+            } else {
+                requestRef.current = requestAnimationFrame(updateTimer);
+            }
+        } else {
+            setTime(elapsed);
+            requestRef.current = requestAnimationFrame(updateTimer);
+        }
     }, []);
 
     const handleStartPause = () => {
@@ -67,7 +114,11 @@ function StopWatchScreen() {
                 cancelAnimationFrame(requestRef.current);
                 requestRef.current = null;
             }
-            accumulatedTimeRef.current = time;
+            if (isTimerMode) {
+                accumulatedTimeRef.current = timerDuration - time;
+            } else {
+                accumulatedTimeRef.current = time;
+            }
             setIsRunning(false);
         } else {
             // Start
@@ -115,6 +166,48 @@ function StopWatchScreen() {
         lastLapTimeRef.current = currentTotal;
     };
 
+    const handleCancel = () => {
+        if (requestRef.current) {
+            cancelAnimationFrame(requestRef.current);
+            requestRef.current = null;
+        }
+        setIsTimerMode(false);
+        isTimerModeRef.current = false;
+        setTime(0);
+        setIsRunning(false);
+        setHasStarted(false);
+        setLaps([]);
+        accumulatedTimeRef.current = 0;
+        lastLapTimeRef.current = 0;
+        
+        navigation.navigate("TimerScreen");
+    };
+
+    useEffect(() => {
+        if (params?.mode === 'timer' && params?.duration) {
+            const duration = params.duration;
+            setIsTimerMode(true);
+            setTimerDuration(duration);
+            
+            isTimerModeRef.current = true;
+            timerDurationRef.current = duration;
+            
+            setTime(duration);
+            setIsRunning(true);
+            setHasStarted(true);
+            
+            startTimeRef.current = Date.now();
+            accumulatedTimeRef.current = 0;
+            
+            if (requestRef.current) {
+                cancelAnimationFrame(requestRef.current);
+            }
+            requestRef.current = requestAnimationFrame(updateTimer);
+            
+            navigation.setParams({ mode: undefined, duration: undefined });
+        }
+    }, [params, updateTimer, navigation]);
+
     useEffect(() => {
         return () => {
             if (requestRef.current) {
@@ -126,6 +219,7 @@ function StopWatchScreen() {
     // Formatted time components for main display
     const formatted = formatTime(time);
     const formattedCurrentLap = formatTime(currentLapTime);
+    const formattedTimer = formatTimerTime(time);
 
     // Dotted circle tick coordinates
     const dots = Array.from({ length: 60 }).map((_, i) => {
@@ -139,7 +233,8 @@ function StopWatchScreen() {
         };
     });
 
-    const indicatorAngle = (time / 60000) * 2 * Math.PI - Math.PI / 2;
+    const elapsed = isTimerMode ? (timerDuration - time) : time;
+    const indicatorAngle = (elapsed / 60000) * 2 * Math.PI - Math.PI / 2;
     const indicatorRadius = 94;
     const indicatorX = 120 + indicatorRadius * Math.cos(indicatorAngle);
     const indicatorY = 120 + indicatorRadius * Math.sin(indicatorAngle);
@@ -184,21 +279,45 @@ function StopWatchScreen() {
 
                 <View style={styles.timeTextContainer}>
                     <View style={styles.mainTimeRow}>
-                        <Text style={[styles.mainTimeText, styles.whiteText]}>
-                            {formatted.minutes}:
-                        </Text>
-                        <Text style={[styles.mainTimeText, styles.redText]}>
-                            {formatted.seconds}.{formatted.hundredths}
-                        </Text>
+                        {isTimerMode ? (
+                            <>
+                                {parseInt(formattedTimer.hours) > 0 && (
+                                    <Text style={[styles.mainTimeText, styles.whiteText]}>
+                                        {formattedTimer.hours}:
+                                    </Text>
+                                )}
+                                <Text style={[styles.mainTimeText, styles.whiteText]}>
+                                    {formattedTimer.minutes}:
+                                </Text>
+                                <Text style={[styles.mainTimeText, styles.redText]}>
+                                    {formattedTimer.seconds}
+                                </Text>
+                            </>
+                        ) : (
+                            <>
+                                <Text style={[styles.mainTimeText, styles.whiteText]}>
+                                    {formatted.minutes}:
+                                </Text>
+                                <Text style={[styles.mainTimeText, styles.redText]}>
+                                    {formatted.seconds}.{formatted.hundredths}
+                                </Text>
+                            </>
+                        )}
                     </View>
-                    <Text style={styles.lapTimeText}>
-                        {formattedCurrentLap.formattedTotal}
-                    </Text>
+                    {isTimerMode ? (
+                        <Text style={styles.lapTimeText}>
+                            Timer
+                        </Text>
+                    ) : (
+                        <Text style={styles.lapTimeText}>
+                            {formattedCurrentLap.formattedTotal}
+                        </Text>
+                    )}
                 </View>
             </View>
 
             <View style={styles.listContainer}>
-                {laps.length > 0 && (
+                {!isTimerMode && laps.length > 0 && (
                     <>
                         <View style={styles.tableHeader}>
                             <Text style={[styles.headerCol, styles.colLeft]}>Lap</Text>
@@ -225,64 +344,94 @@ function StopWatchScreen() {
 
             {/* Controls Bar */}
             <View style={styles.controlsBar}>
-                {hasStarted ? (
-                    <TouchableOpacity
-                        style={[
-                            styles.controlButton,
-                            styles.sideButton,
-                            isRunning && styles.disabledButton
-                        ]}
-                        onPress={handleReset}
-                        disabled={isRunning}
-                    >
-                        <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-                            <Path
-                                d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"
-                                fill="#FFFFFF"
-                            />
-                        </Svg>
-                    </TouchableOpacity>
-                ) : (
-                    <View style={styles.placeholderButton} />
-                )}
+                {isTimerMode ? (
+                    <>
+                        <TouchableOpacity
+                            style={styles.cancelButton}
+                            onPress={handleCancel}
+                        >
+                            <Text style={{ color: "#FFFFFF", fontSize: 15, fontWeight: "600" }}>Cancel</Text>
+                        </TouchableOpacity>
 
-                {/* Start / Pause Button */}
-                <TouchableOpacity
-                    style={[styles.controlButton, styles.centerButton]}
-                    onPress={handleStartPause}
-                >
-                    {isRunning ? (
-                        <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-                            <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" fill="#FFFFFF" />
-                        </Svg>
-                    ) : (
-                        // Play Icon
-                        <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-                            <Path d="M8 5v14l11-7z" fill="#FFFFFF" />
-                        </Svg>
-                    )}
-                </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.controlButton, styles.centerButton]}
+                            onPress={handleStartPause}
+                        >
+                            {isRunning ? (
+                                <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+                                    <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" fill="#FFFFFF" />
+                                </Svg>
+                            ) : (
+                                <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+                                    <Path d="M8 5v14l11-7z" fill="#FFFFFF" />
+                                </Svg>
+                            )}
+                        </TouchableOpacity>
 
-                {/* Flag (Lap) Button */}
-                {hasStarted ? (
-                    <TouchableOpacity
-                        style={[
-                            styles.controlButton,
-                            styles.sideButton,
-                            !isRunning && styles.disabledButton
-                        ]}
-                        onPress={handleLap}
-                        disabled={!isRunning}
-                    >
-                        <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-                            <Path
-                                d="M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6h-5.6z"
-                                fill="#FFFFFF"
-                            />
-                        </Svg>
-                    </TouchableOpacity>
+                        <View style={{ width: 76 }} />
+                    </>
                 ) : (
-                    <View style={styles.placeholderButton} />
+                    <>
+                        {hasStarted ? (
+                            <TouchableOpacity
+                                style={[
+                                    styles.controlButton,
+                                    styles.sideButton,
+                                    isRunning && styles.disabledButton
+                                ]}
+                                onPress={handleReset}
+                                disabled={isRunning}
+                            >
+                                <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+                                    <Path
+                                        d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"
+                                        fill="#FFFFFF"
+                                    />
+                                </Svg>
+                            </TouchableOpacity>
+                        ) : (
+                            <View style={styles.placeholderButton} />
+                        )}
+
+                        {/* Start / Pause Button */}
+                        <TouchableOpacity
+                            style={[styles.controlButton, styles.centerButton]}
+                            onPress={handleStartPause}
+                        >
+                            {isRunning ? (
+                                <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+                                    <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" fill="#FFFFFF" />
+                                </Svg>
+                            ) : (
+                                // Play Icon
+                                <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+                                    <Path d="M8 5v14l11-7z" fill="#FFFFFF" />
+                                </Svg>
+                            )}
+                        </TouchableOpacity>
+
+                        {/* Flag (Lap) Button */}
+                        {hasStarted ? (
+                            <TouchableOpacity
+                                style={[
+                                    styles.controlButton,
+                                    styles.sideButton,
+                                    !isRunning && styles.disabledButton
+                                ]}
+                                onPress={handleLap}
+                                disabled={!isRunning}
+                            >
+                                <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+                                    <Path
+                                        d="M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6h-5.6z"
+                                        fill="#FFFFFF"
+                                    />
+                                </Svg>
+                            </TouchableOpacity>
+                        ) : (
+                            <View style={styles.placeholderButton} />
+                        )}
+                    </>
                 )}
             </View>
         </View>
@@ -423,6 +572,14 @@ const styles = StyleSheet.create({
         height: 76,
         borderRadius: 38,
         backgroundColor: "#E53935"
+    },
+    cancelButton: {
+        width: 76,
+        height: 76,
+        borderRadius: 38,
+        backgroundColor: "#1C1C1E",
+        justifyContent: "center",
+        alignItems: "center"
     },
     disabledButton: {
         opacity: 0.3

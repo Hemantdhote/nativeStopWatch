@@ -1,7 +1,7 @@
 export type RootStackParamList = {
     Home : undefined,
     WorldClockScreen:undefined,
-    StopWatchScreen:undefined,
+    StopWatchScreen: { mode?: 'timer'; duration?: number } | undefined,
     TimerScreen:undefined
 }
 
