@@ -81,6 +81,7 @@ function StopWatchScreen() {
     const startTimeRef = useRef<number>(0);
     const accumulatedTimeRef = useRef<number>(0);
     const lastLapTimeRef = useRef<number>(0);
+    const lastProcessedTimestampRef = useRef<number | null>(null);
 
     // Keep track of the current lap's running time
     const currentLapTime = time - lastLapTimeRef.current;
@@ -184,27 +185,35 @@ function StopWatchScreen() {
     };
 
     useEffect(() => {
-        if (params?.mode === 'timer' && params?.duration) {
-            const duration = params.duration;
-            setIsTimerMode(true);
-            setTimerDuration(duration);
-            
-            isTimerModeRef.current = true;
-            timerDurationRef.current = duration;
-            
-            setTime(duration);
-            setIsRunning(true);
-            setHasStarted(true);
-            
-            startTimeRef.current = Date.now();
-            accumulatedTimeRef.current = 0;
-            
-            if (requestRef.current) {
-                cancelAnimationFrame(requestRef.current);
+        if (params?.mode === 'timer' && params?.duration && params?.timestamp) {
+            if (params.timestamp !== lastProcessedTimestampRef.current) {
+                lastProcessedTimestampRef.current = params.timestamp;
+
+                const duration = params.duration;
+                setIsTimerMode(true);
+                setTimerDuration(duration);
+                
+                isTimerModeRef.current = true;
+                timerDurationRef.current = duration;
+                
+                setTime(duration);
+                setIsRunning(true);
+                setHasStarted(true);
+                
+                startTimeRef.current = Date.now();
+                accumulatedTimeRef.current = 0;
+                
+                if (requestRef.current) {
+                    cancelAnimationFrame(requestRef.current);
+                }
+                requestRef.current = requestAnimationFrame(updateTimer);
+                
+                // Clear the parameters asynchronously to avoid synchronous React state updates
+                // and navigation structure conflicts under React Native Fabric.
+                setTimeout(() => {
+                    navigation.setParams({ mode: undefined, duration: undefined, timestamp: undefined });
+                }, 0);
             }
-            requestRef.current = requestAnimationFrame(updateTimer);
-            
-            navigation.setParams({ mode: undefined, duration: undefined });
         }
     }, [params, updateTimer, navigation]);
 

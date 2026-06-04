@@ -101,7 +101,8 @@ function TimerScreen() {
         
         navigation.navigate("StopWatchScreen", {
             mode: 'timer',
-            duration: durationMs
+            duration: durationMs,
+            timestamp: Date.now()
         });
     };
 
