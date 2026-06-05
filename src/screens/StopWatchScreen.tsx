@@ -89,7 +89,7 @@ function StopWatchScreen() {
     const updateTimer = useCallback(() => {
         const now = Date.now();
         const elapsed = now - startTimeRef.current + accumulatedTimeRef.current;
-        
+
         if (isTimerModeRef.current) {
             const remaining = Math.max(0, timerDurationRef.current - elapsed);
             setTime(remaining);
@@ -180,7 +180,7 @@ function StopWatchScreen() {
         setLaps([]);
         accumulatedTimeRef.current = 0;
         lastLapTimeRef.current = 0;
-        
+
         navigation.navigate("TimerScreen");
     };
 
@@ -192,22 +192,22 @@ function StopWatchScreen() {
                 const duration = params.duration;
                 setIsTimerMode(true);
                 setTimerDuration(duration);
-                
+
                 isTimerModeRef.current = true;
                 timerDurationRef.current = duration;
-                
+
                 setTime(duration);
                 setIsRunning(true);
                 setHasStarted(true);
-                
+
                 startTimeRef.current = Date.now();
                 accumulatedTimeRef.current = 0;
-                
+
                 if (requestRef.current) {
                     cancelAnimationFrame(requestRef.current);
                 }
                 requestRef.current = requestAnimationFrame(updateTimer);
-                
+
                 // Clear the parameters asynchronously to avoid synchronous React state updates
                 // and navigation structure conflicts under React Native Fabric.
                 setTimeout(() => {
@@ -229,6 +229,9 @@ function StopWatchScreen() {
     const formatted = formatTime(time);
     const formattedCurrentLap = formatTime(currentLapTime);
     const formattedTimer = formatTimerTime(time);
+
+    console.log({ formattedTimer, formatted, formattedCurrentLap });
+
 
     // Dotted circle tick coordinates
     const dots = Array.from({ length: 60 }).map((_, i) => {
@@ -563,12 +566,12 @@ const styles = StyleSheet.create({
         justifyContent: "space-evenly",
         alignItems: "center",
         paddingBottom: Platform.OS === "ios" ? 34 : 24,
-        bottom:0,        
-        
+        bottom: 0,
+
     },
     controlButton: {
         justifyContent: "center",
-        alignItems:"center"
+        alignItems: "center"
     },
     sideButton: {
         width: 54,
